@@ -18,6 +18,10 @@
 	<description>Assorted plugins from the Center for Learning and Memory at UT Austin</description>
 
 	<dependencies>
+    <dependency>
+			<groupId>net.imagej</groupId>
+			<artifactId>ij</artifactId>
+		</dependency>
 		<dependency>
 			<groupId>sc.fiji</groupId>
 			<artifactId>TrakEM2_</artifactId>
@@ -25,6 +29,14 @@
 		<dependency>
 			<groupId>sc.fiji</groupId>
 			<artifactId>Fiji_Archipelago</artifactId>
+		</dependency>
+                <dependency>
+                        <groupId>sc.fiji</groupId>
+                        <artifactId>Trainable_Segmentation</artifactId>
+                </dependency>
+		<dependency>
+			<groupId>nz.ac.waikato.cms.weka</groupId>
+			<artifactId>weka-dev</artifactId>
 		</dependency>
   </dependencies>
 
