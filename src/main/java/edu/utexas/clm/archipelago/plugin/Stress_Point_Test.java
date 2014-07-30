@@ -80,9 +80,10 @@ public class Stress_Point_Test implements PlugIn
     public void run(String s)
     {
         final Cluster cluster;
-        final int n = 1024, m = n * n;
+        final int n = 1024 * 16;
+        final int m = 1024;
         int count = 0;
-        long tLast;
+        long tLast, tElapse;
 
         final ArrayList<Future<ArrayList<Point>>> pointFutures;
         final ExecutorService service;
@@ -113,28 +114,32 @@ public class Stress_Point_Test implements PlugIn
 
         service = cluster.getService(1);
 
-        IJ.log("Submitting futures...");
-        for (int i = 0; i < m; ++i)
-        {
-            pointFutures.add(service.submit(new PointCallable(generateRandomPoints(n))));
-        }
 
         try
         {
-            tLast = System.currentTimeMillis();
-            for (final Future<ArrayList<Point>> future : pointFutures)
+            while (true)
             {
+                IJ.log("Submitting futures...");
+
                 ++count;
-                future.get();
-                if (count % n == 0)
+
+                for (int i = 0; i < m; ++i)
                 {
-                    long tNow = System.currentTimeMillis();
-                    long tElapse = tNow - tLast;
-                    IJ.log("Retrieved " + count + " of " + m + " in " + tElapse + "ms...");
-                    tLast = tNow;
+                    pointFutures.add(service.submit(new PointCallable(generateRandomPoints(n))));
                 }
+
+                tLast = System.currentTimeMillis();
+                for (final Future<ArrayList<Point>> future : pointFutures)
+                {
+                    future.get();
+                }
+
+                tElapse = System.currentTimeMillis() - tLast;
+
+                IJ.log("Pass " + count + " took " + tElapse + "ms...");
+
+                pointFutures.clear();
             }
-            IJ.log("done.");
         }
         catch (InterruptedException ie)
         {
@@ -145,5 +150,6 @@ public class Stress_Point_Test implements PlugIn
             IJ.error("" + ee);
             ee.printStackTrace();
         }
+
     }
 }
