@@ -32,74 +32,142 @@ public class PointBottle implements Bottle<Point>
         }
     }
 
-
     private static final Map<Long, Point> idPointMap =
             Collections.synchronizedMap(new HashMap<Long, Point>());
 
     private static final Map<Point, Long> pointIdMap =
             Collections.synchronizedMap(new IdentityHashMap<Point, Long>());
-    private static final ReentrantLock idPointLock = new ReentrantLock();
-    private static final ReentrantLock idIdLock = new ReentrantLock();
     private static final AtomicLong idGenerator = new AtomicLong(1);
+    private static final Map<Point, Integer> pointCountMap =
+            Collections.synchronizedMap(new IdentityHashMap<Point, Integer>());
 
-    private static void mapIdToPoint(final Point point, final long original)
+    private static boolean putPoint(final long id, final Point point)
     {
-        idIdLock.lock();
-
-        pointIdMap.put(point, original);
-
-        idIdLock.unlock();
+        System.out.println("putPoint");
+        synchronized(pointIdMap)
+        {
+            System.out.println("putPoint: Inside synch 1");
+            synchronized(idPointMap)
+            {
+                System.out.println("putPoint: Inside synch 2");
+                if (increment(point))
+                {
+                    pointIdMap.put(point, id);
+                    idPointMap.put(id, point);
+                    System.out.println("putPoint done");
+                    return true;
+                }
+                else
+                {
+                    System.out.println("putPoint done");
+                    return false;
+                }
+            }
+        }
     }
 
     private static long getId(final Point point, final long idDefault)
     {
-        final Long id;
-        idIdLock.lock();
-
-        id = pointIdMap.get(point);
-
-        idIdLock.unlock();
-
-        return id == null ? idDefault : id;
+        System.out.println("getId");
+        synchronized(pointIdMap)
+        {
+            System.out.println("getId: inside synch");
+            final Long id = pointIdMap.get(point);
+            System.out.println("getId done");
+            return id == null ? idDefault : id;
+        }
     }
 
-    private static void mapPointToID(final long orig, final Point point)
+    private static boolean increment(final Point point)
     {
-        idPointLock.lock();
-
-        idPointMap.put(orig, point);
-
-        idPointLock.unlock();
+        System.out.println("increment");
+        synchronized(pointCountMap)
+        {
+            System.out.println("increment: inside synch");
+            if (pointCountMap.containsKey(point))
+            {
+                pointCountMap.put(point, pointCountMap.get(point) + 1);
+                System.out.println("increment done");
+                return false;
+            }
+            else
+            {
+                pointCountMap.put(point, 1);
+                System.out.println("increment done");
+                return true;
+            }
+        }
     }
 
-    private static boolean existsOrPut(final long id, final Point point)
+    private static void decrement(final Point point)
     {
-        idPointLock.lock();
+        // This function relies on the idLock being held by the current thread.
+        // If this fails, this function will throw an assertion exception.
 
-        if (idPointMap.containsKey(id))
+        boolean doRemove = false;
+
+        System.out.println("decrement");
+
+        synchronized (pointCountMap)
         {
-            idPointLock.unlock();
-            return true;
+            System.out.println("decrement: inside synch A");
+            if (pointCountMap.containsKey(point))
+            {
+                int count = pointCountMap.get(point);
+                if (count <= 1)
+                {
+                    doRemove = true;
+                }
+                else
+                {
+                    pointCountMap.put(point, count - 1);
+                }
+            }
+            else
+            {
+                doRemove = true;
+            }
         }
-        else
+
+        System.out.println("decrement: left synch A");
+
+        synchronized (pointIdMap)
         {
-            idIdLock.lock();
-            idPointMap.put(id, point);
-            pointIdMap.put(point, id);
-            idIdLock.unlock();
-            idPointLock.unlock();
-            return false;
+            System.out.println("decrement: inside synch 1");
+            synchronized (idPointMap)
+            {
+                System.out.println("decrement: inside synch 2");
+                if (doRemove)
+                {
+                    long id = pointIdMap.get(point);
+                    pointIdMap.remove(point);
+                    idPointMap.remove(id);
+                }
+            }
         }
+
+        System.out.println("decrement: done");
     }
 
     public static Point getPoint(final long orig, final Point localPoint)
     {
-        final Point point;
-        idPointLock.lock();
-        point = idPointMap.get(orig);
-        idPointLock.unlock();
+        System.out.println("getPoint");
+        synchronized (pointIdMap)
+        {
+            System.out.println("getPoint: inside synch 1");
+            synchronized (idPointMap)
+            {
+                final Point point;
+                System.out.println("getPoint: inside synch 2");
 
-        return point == null ? localPoint : point;
+                point = idPointMap.get(orig);
+                decrement(point);
+
+                System.out.println("getPoint: done");
+
+                return point == null ? localPoint : point;
+            }
+        }
     }
 
     private final float[] w, l;
@@ -125,35 +193,47 @@ public class PointBottle implements Bottle<Point>
 
         if (fromOrigin)
         {
-            /*
-            Sending from root node to client node
-            */
+            // We are executing on the origin
+            final boolean contains;
+
+            System.out.println("constructor");
+
+            synchronized(pointIdMap)
+            {
+                System.out.println("constructor: inside synch");
+                contains = pointIdMap.containsKey(point);
+            }
+
+            System.out.println("constructor: left synch");
 
             //Check to see if we've sent this point before.
-            if (pointIdMap.containsKey(point))
+            if (contains)
             {
                 // If we have, just re-use the existing id.
                 id = getId(point, idHash);
+                // We're sending it again, so we increment the count
+                increment(point);
             }
             else
             {
                 // If we haven't, generate a new id...
                 id = idGenerator.getAndIncrement();
-                // Map that id to the idHash
-                mapIdToPoint(point, id);
-                // Map the point to the id.
-                mapPointToID(id, point);
+                putPoint(id, point);
             }
         }
         else
         {
-            // Sending from client to root.
+            // We are executing on the remote node.
             if (point instanceof IdPoint)
             {
+                // We are ostensibly done with this point. Get its id and decrement the count.
                 id = ((IdPoint)point).getID();
+                decrement(point);
             }
             else
             {
+                // We created a new point on this end. There is no count to decrement. Set the id
+                // negative so that on the origin side, we'll know not to look for it in the cache.
                 id = -1;
             }
         }
@@ -161,35 +241,42 @@ public class PointBottle implements Bottle<Point>
 
     public Point unBottle(final MessageXC xc)
     {
-
-
         if (fromOrigin)
         {
+            // This means we're operating on a remote node.
             final Point point = new IdPoint(id, new Point(l, w));
-            // Operating on a client node
-            if (existsOrPut(id, point))
+            if (!putPoint(id, point))
             {
-                /*
-                If we've already seen this point, return the new point that was generated last time.
-                 */
+                // We have already seen this point, so return the one we generated before.
+                // putPoint will have incremented the count for us.
                 return getPoint(id, point);
             }
             else
             {
+                // We have not seen this point, yet. Return the newly generated one.
                 return point;
             }
         }
         else
         {
+            // We're operating on the origin node.
             if (id >= 0)
             {
+                // We sent this point over a little while ago. When we sent it over, we stored the
+                // original point on this end. Now, fetch that point and update its internal state
+                // to reflect the changes that were done to it on the remote side.
                 final Point point = new Point(l, w);
                 final Point origPoint = getPoint(id, point);
                 syncPoint(origPoint, point);
+                // Decrement the count of the origPoint. If we don't need it any more, we'll clear
+                // it from the cache.
+                decrement(origPoint);
+
                 return origPoint;
             }
             else
             {
+                // This point was created on the remote side, just return a copy.
                 return new Point(l, w);
             }
         }
