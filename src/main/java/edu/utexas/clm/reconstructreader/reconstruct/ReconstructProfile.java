@@ -9,6 +9,8 @@ public class ReconstructProfile {
     private final ReconstructTranslator translator;
     private final double mag;
     private final ReconstructSection section;
+    private double area;
+    private double extent;
 
     public ReconstructProfile(final Element e, final ReconstructTranslator t, ReconstructSection sec)
     {
@@ -22,6 +24,9 @@ public class ReconstructProfile {
 
         m = Utils.getMag(e);
         mag = Double.isNaN(m) ? t.getMag() : m;
+
+        area = 0;
+        extent = 0;
     }
 
     public int getOID()
@@ -42,6 +47,8 @@ public class ReconstructProfile {
         double width = wh[0];
         double height = wh[1];
 
+        setAreaAndExtent(pts);
+
         sb.append("<t2_profile\n" +
                 "oid=\"").append(getOID()).append("\"\n" +
                 "width=\"").append(width).append("\"\n" +
@@ -55,7 +62,55 @@ public class ReconstructProfile {
         sb.append("d=\"");
         Utils.appendBezierPathXML(sb, pts);
         sb.append("\"\n>\n" +
-            "</t2_profile>\n");
+                "</t2_profile>\n");
     }
 
+    public double getArea()
+    {
+        return area;
+    }
+
+    public double getExtent()
+    {
+        return extent;
+    }
+
+    private void setAreaAndExtent(final double[] pts)
+    {
+        double xMin, xMax, yMin, yMax, xExt, yExt;
+        xMin = pts[0]; xMax = xMin;
+        yMin = pts[1]; yMax = yMin;
+
+        for (int i = 0; i < pts.length; i += 2)
+        {
+            double x = pts[i];
+            double y = pts[i + 1];
+
+            if (x < xMin)
+            {
+                xMin = x;
+            }
+
+            if (y < yMin)
+            {
+                yMin = y;
+            }
+
+            if (x > xMax)
+            {
+                xMax = x;
+            }
+
+            if (y > yMax)
+            {
+                y = yMax;
+            }
+        }
+
+        xExt = xMax - xMin;
+        yExt = yMax - yMin;
+
+        extent = xExt > yExt ? xExt : yExt;
+        area = xExt * yExt;
+    }
 }

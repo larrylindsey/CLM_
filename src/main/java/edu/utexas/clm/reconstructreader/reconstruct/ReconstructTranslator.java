@@ -133,7 +133,7 @@ public class ReconstructTranslator {
     private final String nuid;
     private final File inputFile;
 
-    private String postTranslationMessage;
+    private final StringBuilder translationMessageBuilder;
     private String errorMessage;
     private File lastFile;
 
@@ -171,7 +171,7 @@ public class ReconstructTranslator {
         // Parse out the path
         final String localFile = inputFile.getName();
 
-        postTranslationMessage = "";
+        translationMessageBuilder = new StringBuilder();
         errorMessage = "";
         lastFile = null;
 
@@ -265,7 +265,7 @@ public class ReconstructTranslator {
                 }
 
                 //Fix the XML before translation
-                postTranslationMessage = fixXML(sectionDocuments);
+                fixXML(sectionDocuments);
 
                 //Sort section files by index.
                 Collections.sort(sectionDocuments, new Utils.ReconstructSectionIndexComparator());
@@ -334,7 +334,7 @@ public class ReconstructTranslator {
 
     public String getPostTranslationMessage()
     {
-        return postTranslationMessage;
+        return translationMessageBuilder.toString();
     }
 
     public String getLastErrorMessage()
@@ -855,6 +855,11 @@ public class ReconstructTranslator {
             rs.appendXML(sb);
         }
 
+        for (ReconstructProfileList profileList : this.openContours)
+        {
+            profileList.checkSize();
+        }
+
         sb.append("</t2_layer_set>\n");
 
     }
@@ -961,21 +966,24 @@ public class ReconstructTranslator {
     }
 
 
+    public void addMessage(final String msg)
+    {
+        translationMessageBuilder.append(msg).append("\n");
+    }
+
     /**
      * Reconstruct XML Section Documents may be broken in several ways, with respect to
      * TrakEM2 translation. This function fixes that.
      * @param secDocs Reconstruct XML section documents to be fixed.
      * @return a message to display to the user if the XML fix requires some attention.
      */
-    private String fixXML(final Collection<Document> secDocs)
+    private void fixXML(final Collection<Document> secDocs)
     {
-        String message;
-        message = fixNonlinearTransforms(secDocs);
-        message += fixTransformScale(secDocs);
-        return message;
+        fixNonlinearTransforms(secDocs);
+        fixTransformScale(secDocs);
     }
 
-    private String fixTransformScale(final Collection<Document> secDocs)
+    private void fixTransformScale(final Collection<Document> secDocs)
     {
         double[] sectionScale = new double[secDocs.size()];
         double minScale = calculateTransformScale(secDocs, sectionScale);
@@ -1011,25 +1019,22 @@ public class ReconstructTranslator {
         {
             messenger.sendMessage("Reconstruct project has no golden section." +
                     " This may or may not be problematic");
-            return "";
+            addMessage("No golden section was found in this Reconstruct project. This may or may" +
+                    " not cause problems");
         }
         else if (maxScale != minScale)
         {
-            return "This Reconstruct project has been re-calibrated using the scale method.\n" +
-                    "The detected scale was " + minScale + ", but multiple valid scales were" +
-                    " detected,\nthe extremum of which was " + maxScale + ".\nPlease verify that " +
-                    " the areas of your traces have not changed.";
-
+            addMessage("This Reconstruct project has been re-calibrated using the scale method.");
+            addMessage("The detected scale was " + minScale + ", but multiple valid scales were" +
+                    " detected,");
+            addMessage("the extremum of which was " + maxScale + ".");
+            addMessage("Please verify that the areas of your traces have not changed.");
         }
         else if (minScale != 1)
         {
-            return "This Reconstruct project has been re-calibrated using the scale method.\n" +
-                    "The detected scale was " + minScale + ".\nPlease verify that " +
-                    " the areas of your traces have not changed.";
-        }
-        else
-        {
-            return "";
+            addMessage("This Reconstruct project has been re-calibrated using the scale method.");
+            addMessage("The detected scale was " + minScale + ".");
+            addMessage("Please verify that the areas of your traces have not changed.");
         }
     }
 
@@ -1156,11 +1161,9 @@ public class ReconstructTranslator {
      * to the trace, then set the transform to the identity.
      *
      * @param secDocs a List of XML Documents representing the Section files
-     * @return a message to display to the user, if a nonlinear image transform was fixed.
      */
-    private String fixNonlinearTransforms(final Collection<Document> secDocs)
+    private void fixNonlinearTransforms(final Collection<Document> secDocs)
     {
-        String message = "";
         String unalignedMessage = "Nonlinear Reconstruct alignments are incompatible with TrakEM2.\n" +
                 "At least one was found in your project.\n" +
                 "Each such section has been reset to an unaligned section.\n\n";
@@ -1172,7 +1175,7 @@ public class ReconstructTranslator {
             Element transform;
             if (isNonLinear(transform = Utils.getFirstImageTransformElement(secDoc)))
             {
-                message = unalignedMessage;
+                addMessage(unalignedMessage);
                 fixImageTransform(secDoc, imageElement(transform));
             }
             else
@@ -1192,7 +1195,6 @@ public class ReconstructTranslator {
                 }
             }
         }
-        return message;
     }
 
     private boolean isNonLinear(final Element transform)

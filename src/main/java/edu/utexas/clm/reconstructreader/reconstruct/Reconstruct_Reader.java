@@ -40,7 +40,9 @@ public class Reconstruct_Reader implements PlugIn
 
             if (!translator.getPostTranslationMessage().isEmpty())
             {
-                IJ.showMessage(translator.getPostTranslationMessage());
+                final String message = translator.getPostTranslationMessage();
+                IJ.showMessage(message);
+                IJ.log(message);
             }
 
             if (projectFileName != null)

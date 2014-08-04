@@ -64,4 +64,18 @@ public class ReconstructProfileList implements ContourSet
             return false;
         }
     }
+
+    public void checkSize()
+    {
+        boolean anyZeroArea = false;
+        for (ReconstructProfile profile : profileList)
+        {
+            anyZeroArea |= profile.getArea() == 0 && profile.getExtent() != 0;
+        }
+
+        if (anyZeroArea)
+        {
+            translator.addMessage("Parts of " + name + " will not be affected by alignment");
+        }
+    }
 }
