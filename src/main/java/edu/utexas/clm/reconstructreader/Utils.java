@@ -444,7 +444,30 @@ public final class Utils {
     public static void appendBezierPathXML(final StringBuilder sb, final double[] dpts)
     {
         float[] pts = doubleToFloat(dpts);
-        if (pts.length > 0)
+
+        // pts.length == 4 means we have only 2 2D points in this profile
+        // This will cause problems during any alignment operations we might do later, so fix it by
+        // interpolating a point in between.
+        if (pts.length == 4)
+        {
+            float[] pts2 = new float[4];
+
+            float sq2_2 = (float)Math.sqrt(2.0f) / 2.0f;
+
+            float cX = (pts[0] + pts[2]) / 2.0f;
+            float cY = (pts[1] + pts[3]) / 2.0f;
+
+            float x0 = pts[0] - cX, y0 = pts[1] - cY, x1 = pts[2] - cX, y1 = pts[3] - cY;
+
+            pts[0] = (x0 + y0) * sq2_2 + cX;
+            pts[1] = (-x0 + y0) * sq2_2 + cY;
+            pts[2] = (x1 + y1) * sq2_2 + cX;
+            pts[3] = (-x1 + y1) * sq2_2 + cY;
+
+            //pts = pts2;
+        }
+
+        if (pts.length > 2)
         {
             sb.append("M ").append(pts[0]).append(",").append(pts[1]).append(" ");
 
